@@ -2,20 +2,13 @@
 using System.Diagnostics;
 using System.IO;
 
-public static class WindowsOSUtility
+public class WindowsOSUtility
 {
     public static void ExploreDirectory(string path)
     {
         path = path.Replace("/", "\\");
-        if (Directory.Exists(path))
-        {
-            //System.Diagnostics.Process.Start(Path.GetFullPath(path));
-            Process open = new Process();
-            open.StartInfo.FileName = "explorer";
-            open.StartInfo.Arguments = @"/select," + path;
-            open.Start();
-        }
-        else if (File.Exists(path))
+        //System.Diagnostics.Process.Start(Path.GetFullPath(path));
+        if (Directory.Exists(path) || File.Exists(path))
         {
             Process open = new Process();
             open.StartInfo.FileName = "explorer";
@@ -32,7 +25,7 @@ public static class WindowsOSUtility
         startInfo.Arguments = path;
         try
         {
-         
+
             Process.Start(startInfo);
         }
         catch (Exception e)

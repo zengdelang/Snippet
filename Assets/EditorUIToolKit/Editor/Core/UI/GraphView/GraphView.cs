@@ -304,14 +304,14 @@ public class GraphView : View
         if (isMultiSelecting && e.rawType == EventType.MouseUp)
         {
             var rect = GetSelectionRect(selectionStartPos, e.mousePosition);
-            var overlapedNodes = currentGraph.allNodes.Where(n => rect.Overlaps(n.nodeRect) && !n.isHidden).ToList();
+            var overlapedNodes = currentGraph.allNodes.Where(n => rect.Overlaps(n.nodeRect)).ToList();
             isMultiSelecting = false;
 
             if (e.control && rect.width > 50 && rect.height > 50)
             {
                 /*Undo.RegisterCompleteObjectUndo(currentGraph, "Create Group");
                 if (currentGraph.canvasGroups == null)
-                {
+                
                     currentGraph.canvasGroups = new List<CanvasGroup>();
                 }
                 currentGraph.canvasGroups.Add(new CanvasGroup(rect, "New Canvas Group"));*/
@@ -342,7 +342,7 @@ public class GraphView : View
                 GUI.Box(rect, string.Empty);
                 foreach (var node in currentGraph.allNodes)
                 {
-                    if (rect.Overlaps(node.nodeRect) && !node.isHidden)
+                    if (rect.Overlaps(node.nodeRect))
                     {
                         var highlightRect = node.nodeRect;
                         GUI.Box(highlightRect, string.Empty, "windowHighlight");

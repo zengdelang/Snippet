@@ -26,8 +26,13 @@ public abstract class GraphTest : BaseGraph
 
     [SerializeField]
     private int m_AutoId;
-  
+
     //private List<CanvasGroup> _canvasGroups = null;
+
+    private Rect inspectorRect = new Rect(15, 55, 0, 0);
+    private Vector2 nodeInspectorScrollPos;
+
+    public int keyboardControl;
 
     public Vector2 translation
     {
@@ -51,7 +56,6 @@ public abstract class GraphTest : BaseGraph
     }
 
     public Action PostGUI { get; set; }
-
     public abstract Type baseNodeType { get; }
 
     public T AddNode<T>() where T : NodeTest
@@ -83,6 +87,15 @@ public abstract class GraphTest : BaseGraph
         newNode.id = ++m_AutoId;
         allNodes.Add(newNode);
         return newNode;
+    }
+
+    public void RemoveNode(int nodeId, bool recordUndo = true)
+    {
+        var node = GetNode(nodeId);
+        if (node != null)
+        {
+            RemoveNode(node, recordUndo);
+        }
     }
 
     public void RemoveNode(NodeTest node, bool recordUndo = true)
@@ -125,8 +138,8 @@ public abstract class GraphTest : BaseGraph
         }
 
         connection.OnDestroy();
-        connection.sourceNode.OnChildDisconnected(connection.sourceNode.outConnections.IndexOf(connection));
-        connection.targetNode.OnParentDisconnected(connection.targetNode.inConnections.IndexOf(connection));
+        connection.sourceNode.OnOutputConnectionDisconnected(connection.sourceNode.outConnections.IndexOf(connection));
+        connection.targetNode.OnInputConnectionDisconnected(connection.targetNode.inConnections.IndexOf(connection));
 
         connection.sourceNode.outConnections.Remove(connection);
         connection.targetNode.inConnections.Remove(connection);
@@ -157,9 +170,6 @@ public abstract class GraphTest : BaseGraph
             PostGUI = null;
         }
     }
-
-    private Rect inspectorRect = new Rect(15, 55, 0, 0);
-    private Vector2 nodeInspectorScrollPos;
 
     private NodeTest selectedNode
     {
@@ -276,8 +286,6 @@ public abstract class GraphTest : BaseGraph
             GUI.color = Color.white;
         }
     }
-
-    public int keyboardControl;
 
     protected virtual void HandleEvents(Event e, Vector2 canvasMousePos)
     {
@@ -468,8 +476,8 @@ public abstract class GraphTest : BaseGraph
 
         var newConnection = ConnectionTest.Create(sourceNode, targetNode, indexToInsert);
         newConnection.id = ++m_AutoId;
-        sourceNode.OnChildConnected(indexToInsert);
-        targetNode.OnParentConnected(targetNode.inConnections.IndexOf(newConnection));
+        sourceNode.OnOutputConnectionConnected(indexToInsert);
+        targetNode.OnInputConnectionConnected(targetNode.inConnections.IndexOf(newConnection));
         return newConnection;
     }
 
