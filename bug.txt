@@ -1,0 +1,12 @@
+上层点了，非active，下层都应该非active,那非激活的删除了，下层也应该激活，有可能出现无限循环，循环引用
+
+
+课题1：
+	如果判断鼠标点到bezier曲线上
+
+
+修改使用： Inspector来检视窗口
+
+
+WindowsOSUtility优化
+破解AddComponent窗口代码
