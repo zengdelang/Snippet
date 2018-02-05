@@ -26,4 +26,9 @@ public class EditorWindowWrap
         s_ActionMap.Add(window, action);
         return action();
     }
+
+    public static void ShowAsDropDown()
+    {
+        
+    }
 }
