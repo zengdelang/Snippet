@@ -149,13 +149,13 @@ public class AddComponentWindow : EditorWindow
 
     private void Init(Rect buttonRect)
     {
-        /*m_OpenTime = DateTime.UtcNow;
+        m_OpenTime = DateTime.UtcNow;
         buttonRect = GUIUtilityWrap.GUIToScreenRect(buttonRect);
         CreateComponentTree();
-        this.ShowAsDropDown(buttonRect, new Vector2(buttonRect.width, 320f), null, ShowMode.PopupMenuWithKeyboardFocus);
+        EditorWindowWrap.ShowAsDropDown(this, buttonRect, new Vector2(buttonRect.width, 320f));
         Focus();
-        this.m_Parent.AddToAuxWindowList();
-        wantsMouseMove = true;*/
+        EditorWindowWrap.AddToAuxWindowList(this);
+        wantsMouseMove = true;
     }
 
     private void CreateComponentTree()
@@ -435,8 +435,6 @@ public class AddComponentWindow : EditorWindow
             }
         }
     }
-
-
 
     private void ListGUI(Element[] tree, float anim, GroupElement parent, GroupElement grandParent)
     {
