@@ -1,79 +1,54 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
-public class AddComponentWindow : EditorWindow
+public class AddItemWindow : EditorWindow
 {
-    private string m_ClassName = "";
     private List<GroupElement> m_Stack = new List<GroupElement>();
+
     private float m_Anim = 1f;
     private int m_AnimTarget = 1;
     private long m_LastTime;
     private bool m_ScrollToSelected;
     private string m_DelayedSearch;
     private string m_Search = "";
-    private static AddComponentWindow s_AddComponentWindow;
-    private static bool s_DirtyList;
-    private const Language kDefaultLanguage = Language.CSharp;
+
+    private bool m_DirtyList;
+
     private const int kHeaderHeight = 30;
     private const int kWindowHeight = 320;
-    private const int kHelpHeight = 0;
-    private const string kLanguageEditorPrefName = "NewScriptLanguage";
-    private const string kComponentSearch = "ComponentSearchString";
+
+    private string m_ItemSearchKey = "";
+
     private static Styles s_Styles;
     private static long s_LastClosedTime;
-    internal static Language s_Lang;
-    private GameObject[] m_GameObjects;
+    private static AddItemWindow s_AddItemWindow;
+
+    private string[] m_ItemPathArray;
+    private Texture2D[] m_ItemTexture2DArray;
+    private object[] m_ItemInfoArray;
+    private Action<string, object> m_ClickedAction;
+
     private Element[] m_Tree;
     private Element[] m_SearchResultTree;
-    private DateTime m_OpenTime;
+
     private const string kSearchHeader = "Search";
-
-    internal static string className
-    {
-        get
-        {
-            return s_AddComponentWindow.m_ClassName;
-        }
-        set
-        {
-            s_AddComponentWindow.m_ClassName = value;
-        }
-    }
-
-    internal static GameObject[] gameObjects
-    {
-        get
-        {
-            return s_AddComponentWindow.m_GameObjects;
-        }
-    }
 
     private bool hasSearch
     {
-        get
-        {
-            return !string.IsNullOrEmpty(m_Search);
-        }
+        get { return !string.IsNullOrEmpty(m_Search); }
     }
 
     private GroupElement activeParent
     {
-        get
-        {
-            return m_Stack[m_Stack.Count - 2 + m_AnimTarget];
-        }
+        get { return m_Stack[m_Stack.Count - 2 + m_AnimTarget]; }
     }
 
     private Element[] activeTree
     {
-        get
-        {
-            return !hasSearch ? m_Tree : m_SearchResultTree;
-        }
+        get { return !hasSearch ? m_Tree : m_SearchResultTree; }
     }
 
     private Element activeElement
@@ -91,167 +66,136 @@ public class AddComponentWindow : EditorWindow
 
     private bool isAnimating
     {
-        get
-        {
-            return m_Anim != (double)m_AnimTarget;
-        }
-    }
-
-    static AddComponentWindow()
-    {
-        s_DirtyList = true;
+        get { return m_Anim != m_AnimTarget; }
     }
 
     private void OnEnable()
     {
-        s_AddComponentWindow = this;
-        s_Lang = (Language)EditorPrefs.GetInt("NewScriptLanguage", 0);
-        if (!Enum.IsDefined(typeof(Language), s_Lang))
-        {
-            EditorPrefs.SetInt("NewScriptLanguage", 0);
-            s_Lang = Language.CSharp;
-        }
-        m_Search = EditorPrefs.GetString("ComponentSearchString", "");
+        m_DirtyList = true;
+        m_Search = EditorPrefs.GetString(m_ItemSearchKey, "");
     }
 
     private void OnDisable()
     {
         s_LastClosedTime = DateTime.Now.Ticks / 10000L;
-        s_AddComponentWindow = null;
     }
 
-   
-    internal static void ExecuteAddComponentMenuItem()
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="rect"></param>
+    /// <param name="itemPathArray">item的路径数据，路径格式： xxx/yyy/zzz</param>
+    /// <param name="itemTexture2DArray">item的图片</param>
+    /// <param name="itemInfoArray">item的额外数据，传入点击回调</param>
+    /// <param name="clickedAction">点击item的回调</param>
+    /// <returns></returns>
+    internal static bool Show(Rect rect, string searchStringKey, string[] itemPathArray, Texture2D[] itemTexture2DArray, object[] itemInfoArray, Action<string, object> clickedAction)
     {
-       /* InspectorWindow inspectorWindow = FirstInspectorWithGameObject();
-        if (!(inspectorWindow != null))
-            return;
-        inspectorWindow.SendEvent(EditorGUIUtility.CommandEvent("OpenAddComponentDropdown"));*/
-    }
-
-    internal static bool Show(Rect rect, GameObject[] gos)
-    {
-        Object[] objectsOfTypeAll = Resources.FindObjectsOfTypeAll(typeof(AddComponentWindow));
+        Object[] objectsOfTypeAll = Resources.FindObjectsOfTypeAll(typeof(AddItemWindow));
         if (objectsOfTypeAll.Length > 0)
         {
-            ((EditorWindow)objectsOfTypeAll[0]).Close();
+            ((EditorWindow) objectsOfTypeAll[0]).Close();
             return false;
         }
         if (DateTime.Now.Ticks / 10000L < s_LastClosedTime + 50L)
             return false;
-        Event.current.Use();
-        if (s_AddComponentWindow == null)
-            s_AddComponentWindow = CreateInstance<AddComponentWindow>();
-        s_AddComponentWindow.Init(rect);
-        s_AddComponentWindow.m_GameObjects = gos;
+
+        if(Event.current != null)
+            Event.current.Use();
+        
+        s_AddItemWindow = CreateInstance<AddItemWindow>();
+        s_AddItemWindow.m_ItemPathArray = itemPathArray;
+        s_AddItemWindow.m_ItemTexture2DArray = itemTexture2DArray;
+        s_AddItemWindow.m_ItemInfoArray = itemInfoArray;
+        s_AddItemWindow.m_ClickedAction = clickedAction;
+        s_AddItemWindow.m_ItemSearchKey = searchStringKey;
+        s_AddItemWindow.Init(rect);
         return true;
     }
 
     private void Init(Rect buttonRect)
     {
-        m_OpenTime = DateTime.UtcNow;
         buttonRect = GUIUtilityWrap.GUIToScreenRect(buttonRect);
         CreateComponentTree();
-        EditorWindowWrap.ShowAsDropDown(this, buttonRect, new Vector2(buttonRect.width, 320f));
+        EditorWindowWrap.ShowAsDropDown(this, buttonRect, new Vector2(buttonRect.width, kWindowHeight));
         Focus();
         EditorWindowWrap.AddToAuxWindowList(this);
         wantsMouseMove = true;
     }
 
-    private void CreateComponentTree()
+    [MenuItem("Tools/Eaxamples/ComponentWindow", false, 0)]
+    public static void ShowCoreConfigTool()
     {
-        GroupElement element2;
-        string[] submenus = Unsupported.GetSubmenus("Component");
-        string[] submenusCommands = Unsupported.GetSubmenusCommands("Component");
+        Show(new Rect(100, 0, 320, 320), "itemSearchString", Unsupported.GetSubmenus("Component"), null, null, null);
+    }
+
+    private void CreateComponentTree()
+    {      
         List<string> list = new List<string>();
         List<Element> list2 = new List<Element>();
-        for (int i = 0; i < submenus.Length; i++)
+        for (int i = 0; i < m_ItemPathArray.Length; i++)
         {
-            if (submenusCommands[i] != "ADD")
+            string menuPath = m_ItemPathArray[i];
+            string[] strArray3 = menuPath.Split('/');
+            while ((strArray3.Length - 1) < list.Count)
             {
-                string menuPath = submenus[i];
-                char[] separator = { '/' };
-                string[] strArray3 = menuPath.Split(separator);
-                while ((strArray3.Length - 1) < list.Count)
-                {
-                    list.RemoveAt(list.Count - 1);
-                }
-                while ((list.Count > 0) && (strArray3[list.Count - 1] != list[list.Count - 1]))
-                {
-                    list.RemoveAt(list.Count - 1);
-                }
-                while ((strArray3.Length - 1) > list.Count)
-                {
-                    list2.Add(new GroupElement(list.Count, "111"));
-                    list.Add(strArray3[list.Count]);
-                }
-                list2.Add(new ComponentElement(list.Count, "222", menuPath, submenusCommands[i]));
+                list.RemoveAt(list.Count - 1);
             }
+            while ((list.Count > 0) && (strArray3[list.Count - 1] != list[list.Count - 1]))
+            {
+                list.RemoveAt(list.Count - 1);
+            }
+            while ((strArray3.Length - 1) > list.Count)
+            {
+                list2.Add(new GroupElement(list.Count, strArray3[list.Count]));
+                list.Add(strArray3[list.Count]);
+            }
+
+            Texture2D texture = null;
+            if (m_ItemTexture2DArray != null && i < m_ItemPathArray.Length)
+            {
+                texture = m_ItemTexture2DArray[i];
+            }
+
+            object info = null;
+            if (m_ItemInfoArray != null && i < m_ItemInfoArray.Length)
+            {
+                info = m_ItemTexture2DArray[i];
+            }
+
+            list2.Add(new ItemElement(list.Count, strArray3[strArray3.Length - 1], menuPath, texture, info));
         }
- 
+
         m_Tree = list2.ToArray();
         if (m_Stack.Count == 0)
         {
             m_Stack.Add(m_Tree[0] as GroupElement);
         }
-        else
-        {
-            GroupElement parent = m_Tree[0] as GroupElement;
-            var level = 0;
-            Label_01AC:
-            element2 = m_Stack[level];
-            m_Stack[level] = parent;
-            m_Stack[level].selectedIndex = element2.selectedIndex;
-            m_Stack[level].scroll = element2.scroll;
-            level++;
-            if (level != m_Stack.Count)
-            {
-                Element element3 = GetChildren(activeTree, parent).FirstOrDefault(delegate(Element element)
-                    {
-                        return element.name == m_Stack[level].name;
-                    });
-                if ((element3 != null) && (element3 is GroupElement))
-                {
-                    parent = element3 as GroupElement;
-                }
-                else
-                {
-                    while (m_Stack.Count > level)
-                    {
-                        m_Stack.RemoveAt(level);
-                    }
-                }
-                goto Label_01AC;
-            }
-        }
-  
-        s_DirtyList = false;
+
+        m_DirtyList = false;
         RebuildSearch();
     }
 
-    internal void OnGUI()
+    void OnGUI()
     {
         if (s_Styles == null)
             s_Styles = new Styles();
+
         GUI.Label(new Rect(0.0f, 0.0f, position.width, position.height), GUIContent.none, s_Styles.background);
-        if (s_DirtyList)
+        if (m_DirtyList)
             CreateComponentTree();
         HandleKeyboard();
         GUILayout.Space(7f);
-      //  if (!(activeParent is NewScriptElement))
-            EditorGUI.FocusTextInControl("ComponentSearch");
+
+        EditorGUI.FocusTextInControl(m_ItemSearchKey);
         Rect rect = GUILayoutUtility.GetRect(10f, 20f);
         rect.x += 8f;
         rect.width -= 16f;
-        GUI.SetNextControlName("ComponentSearch");
-       /* using (new EditorGUI.DisabledScope(false))
+        GUI.SetNextControlName(m_ItemSearchKey);
+
+        string str = EditorGUIWrap.SearchField(rect, m_DelayedSearch ?? m_Search);
+        if (str != m_Search || m_DelayedSearch != null)
         {
-            string str = EditorGUI.SearchField(rect, m_DelayedSearch ?? m_Search);
-            if (!(str != m_Search))
-            {
-                if (m_DelayedSearch == null)
-                    goto label_15;
-            }
             if (!isAnimating)
             {
                 m_Search = m_DelayedSearch ?? str;
@@ -261,13 +205,15 @@ public class AddComponentWindow : EditorWindow
             }
             else
                 m_DelayedSearch = str;
-        }*/
-        label_15:
+        }        
+
         ListGUI(activeTree, m_Anim, GetElementRelative(0), GetElementRelative(-1));
         if (m_Anim < 1.0)
             ListGUI(activeTree, m_Anim + 1f, GetElementRelative(-1), GetElementRelative(-2));
+
         if (!isAnimating || Event.current.type != EventType.Repaint)
             return;
+
         long ticks = DateTime.Now.Ticks;
         float num = (ticks - m_LastTime) / 1E+07f;
         m_LastTime = ticks;
@@ -287,43 +233,47 @@ public class AddComponentWindow : EditorWindow
         if (current.type != EventType.KeyDown)
             return;
 
+        if (current.keyCode == KeyCode.DownArrow)
         {
-            if (current.keyCode == KeyCode.DownArrow)
+            ++activeParent.selectedIndex;
+            activeParent.selectedIndex = Mathf.Min(activeParent.selectedIndex,
+                GetChildren(activeTree, activeParent).Count - 1);
+            m_ScrollToSelected = true;
+            current.Use();
+        }
+
+        if (current.keyCode == KeyCode.UpArrow)
+        {
+            --activeParent.selectedIndex;
+            activeParent.selectedIndex = Mathf.Max(activeParent.selectedIndex, 0);
+            m_ScrollToSelected = true;
+            current.Use();
+        }
+
+        if (current.keyCode == KeyCode.Return || current.keyCode == KeyCode.KeypadEnter)
+        {
+            GoToChild(activeElement, true);
+            current.Use();
+        }
+
+        if (!hasSearch)
+        {
+            if (current.keyCode == KeyCode.LeftArrow || current.keyCode == KeyCode.Backspace)
             {
-                ++activeParent.selectedIndex;
-                activeParent.selectedIndex = Mathf.Min(activeParent.selectedIndex, GetChildren(activeTree, activeParent).Count - 1);
-                m_ScrollToSelected = true;
+                GoToParent();
                 current.Use();
             }
-            if (current.keyCode == KeyCode.UpArrow)
+
+            if (current.keyCode == KeyCode.RightArrow)
             {
-                --activeParent.selectedIndex;
-                activeParent.selectedIndex = Mathf.Max(activeParent.selectedIndex, 0);
-                m_ScrollToSelected = true;
+                GoToChild(activeElement, false);
                 current.Use();
             }
-            if (current.keyCode == KeyCode.Return || current.keyCode == KeyCode.KeypadEnter)
+
+            if (current.keyCode == KeyCode.Escape)
             {
-                GoToChild(activeElement, true);
+                Close();
                 current.Use();
-            }
-            if (!hasSearch)
-            {
-                if (current.keyCode == KeyCode.LeftArrow || current.keyCode == KeyCode.Backspace)
-                {
-                    GoToParent();
-                    current.Use();
-                }
-                if (current.keyCode == KeyCode.RightArrow)
-                {
-                    GoToChild(activeElement, false);
-                    current.Use();
-                }
-                if (current.keyCode == KeyCode.Escape)
-                {
-                    Close();
-                    current.Use();
-                }
             }
         }
     }
@@ -333,24 +283,22 @@ public class AddComponentWindow : EditorWindow
         if (!hasSearch)
         {
             m_SearchResultTree = null;
-            if (m_Stack[m_Stack.Count - 1].name == "Search")
+            if (m_Stack[m_Stack.Count - 1].name == kSearchHeader)
             {
                 m_Stack.Clear();
                 m_Stack.Add(m_Tree[0] as GroupElement);
             }
             m_AnimTarget = 1;
             m_LastTime = DateTime.Now.Ticks;
-            m_ClassName = "NewBehaviourScript";
         }
         else
         {
-            m_ClassName = m_Search;
             string[] strArray = m_Search.ToLower().Split(' ');
             List<Element> elementList1 = new List<Element>();
             List<Element> elementList2 = new List<Element>();
             foreach (Element element in m_Tree)
             {
-                if (element is ComponentElement)
+                if (element is ItemElement)
                 {
                     string str1 = element.name.ToLower().Replace(" ", "");
                     bool flag1 = true;
@@ -381,7 +329,7 @@ public class AddComponentWindow : EditorWindow
             elementList1.Sort();
             elementList2.Sort();
             List<Element> elementList3 = new List<Element>();
-            elementList3.Add(new GroupElement(0, "Search"));
+            elementList3.Add(new GroupElement(0, kSearchHeader));
             elementList3.AddRange(elementList1);
             elementList3.AddRange(elementList2);
             elementList3.Add(m_Tree[m_Tree.Length - 1]);
@@ -413,18 +361,23 @@ public class AddComponentWindow : EditorWindow
 
     private void GoToChild(Element e, bool addIfComponent)
     {
-        if (e is ComponentElement)
+        if (e is ItemElement)
         {
             if (!addIfComponent)
                 return;
 
-           // EditorApplication.ExecuteMenuItemOnGameObjects(((ComponentElement)e).menuPath, m_GameObjects);
+            if (m_ClickedAction != null)
+            {
+                var itemElement = e as ItemElement;
+                m_ClickedAction(itemElement.menuPath, itemElement.info);
+            }
             Close();
         }
         else
         {
             if (hasSearch)
                 return;
+
             m_LastTime = DateTime.Now.Ticks;
             if (m_AnimTarget == 0)
                 m_AnimTarget = 1;
@@ -440,9 +393,9 @@ public class AddComponentWindow : EditorWindow
     {
         anim = Mathf.Floor(anim) + Mathf.SmoothStep(0.0f, 1f, Mathf.Repeat(anim, 1f));
         Rect position1 = position;
-        position1.x = (float)(position.width * (1.0 - anim) + 1.0);
-        position1.y = 30f;
-        position1.height -= 30f;
+        position1.x = (float) (position.width * (1.0 - anim) + 1.0);
+        position1.y = kHeaderHeight;
+        position1.height -= kHeaderHeight;
         position1.width -= 2f;
         GUILayout.BeginArea(position1);
         Rect rect = GUILayoutUtility.GetRect(10f, 25f);
@@ -459,6 +412,7 @@ public class AddComponentWindow : EditorWindow
                 Event.current.Use();
             }
         }
+        ListGUI(tree, parent);
         GUILayout.EndArea();
     }
 
@@ -472,36 +426,37 @@ public class AddComponentWindow : EditorWindow
         {
             Element e = children[index];
             Rect rect2 = GUILayoutUtility.GetRect(16f, 20f, GUILayout.ExpandWidth(true));
-            if ((Event.current.type == EventType.MouseMove || Event.current.type == EventType.MouseDown) && (parent.selectedIndex != index && rect2.Contains(Event.current.mousePosition)))
+            if ((Event.current.type == EventType.MouseMove || Event.current.type == EventType.MouseDown) &&
+                (parent.selectedIndex != index && rect2.Contains(Event.current.mousePosition)))
             {
                 parent.selectedIndex = index;
                 Repaint();
             }
+
             bool flag1 = false;
             if (index == parent.selectedIndex)
             {
                 flag1 = true;
                 rect1 = rect2;
             }
+
             if (Event.current.type == EventType.Repaint)
             {
                 GUIStyle guiStyle = s_Styles.groupButton;
                 GUIContent content = e.content;
-                bool flag2 = e is ComponentElement;
+                bool flag2 = e is ItemElement;
                 if (flag2)
                 {
-                    ComponentElement componentElement = (ComponentElement)e;
                     guiStyle = s_Styles.componentButton;
-                    if (componentElement.isLegacy && hasSearch)
-                        content = componentElement.legacyContent;
                 }
                 guiStyle.Draw(rect2, content, false, false, flag1, flag1);
                 if (!flag2)
                 {
-                    Rect position = new Rect((float)(rect2.x + (double)rect2.width - 13.0), rect2.y + 4f, 13f, 13f);
+                    Rect position = new Rect((float) (rect2.x + (double) rect2.width - 13.0), rect2.y + 4f, 13f, 13f);
                     s_Styles.rightArrow.Draw(position, false, false, false, false);
                 }
             }
+
             if (Event.current.type == EventType.MouseDown && rect2.Contains(Event.current.mousePosition))
             {
                 Event.current.Use();
@@ -509,18 +464,21 @@ public class AddComponentWindow : EditorWindow
                 GoToChild(e, true);
             }
         }
+
         EditorGUIUtility.SetIconSize(Vector2.zero);
         GUILayout.EndScrollView();
         if (!m_ScrollToSelected || Event.current.type != EventType.Repaint)
             return;
+
         m_ScrollToSelected = false;
         Rect lastRect = GUILayoutUtility.GetLastRect();
-        if (rect1.yMax - (double)lastRect.height > parent.scroll.y)
+        if (rect1.yMax - (double) lastRect.height > parent.scroll.y)
         {
             parent.scroll.y = rect1.yMax - lastRect.height;
             Repaint();
         }
-        if (rect1.y < (double)parent.scroll.y)
+
+        if (rect1.y < (double) parent.scroll.y)
         {
             parent.scroll.y = rect1.y;
             Repaint();
@@ -557,11 +515,6 @@ public class AddComponentWindow : EditorWindow
         return elementList;
     }
 
-    internal enum Language
-    {
-        CSharp
-    }
-
     private class Element : IComparable
     {
         public int level;
@@ -569,10 +522,7 @@ public class AddComponentWindow : EditorWindow
 
         public string name
         {
-            get
-            {
-                return content.text;
-            }
+            get { return content.text; }
         }
 
         public virtual int CompareTo(object o)
@@ -581,58 +531,26 @@ public class AddComponentWindow : EditorWindow
         }
     }
 
-    private class ComponentElement : Element
+    private class ItemElement : Element
     {
         public string menuPath;
-        public bool isLegacy;
-        private GUIContent m_LegacyContentCache;
-
-        public GUIContent legacyContent
-        {
-            get
-            {
-                if (m_LegacyContentCache == null)
-                {
-                    m_LegacyContentCache = new GUIContent(content);
-                    m_LegacyContentCache.text += " (Legacy)";
-                }
-                return m_LegacyContentCache;
-            }
-        }
-
-        public ComponentElement(int level, string name, string menuPath, string commandString)
+        public object info;
+      
+        public ItemElement(int level, string name, string menuPath, Texture2D texture, object info)
         {
             this.level = level;
             this.menuPath = menuPath;
-            isLegacy = menuPath.Contains("Legacy");
-            if (commandString.StartsWith("SCRIPT"))
-            {
-                Texture miniThumbnail = AssetPreview.GetMiniThumbnail(EditorUtility.InstanceIDToObject(int.Parse(commandString.Substring(6))));
-                content = new GUIContent(name, miniThumbnail);
-            }
+            this.info = info;
+
+            if(texture == null)
+                content = new GUIContent(name);
             else
             {
-                int classID = int.Parse(commandString);
-                //需要个图片吗
-                content = new GUIContent(name);
+                content = new GUIContent(name, texture);
             }
-        }
-
-        public override int CompareTo(object o)
-        {
-            if (o is ComponentElement)
-            {
-                ComponentElement componentElement = (ComponentElement)o;
-                if (isLegacy && !componentElement.isLegacy)
-                    return 1;
-                if (!isLegacy && componentElement.isLegacy)
-                    return -1;
-            }
-            return base.CompareTo(o);
         }
     }
 
-    [Serializable]
     private class GroupElement : Element
     {
         public int selectedIndex;

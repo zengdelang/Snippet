@@ -38,11 +38,10 @@ public class EditorWindowWrap
         var popupLocationArrayType = type.Assembly.GetType("UnityEditor.PopupLocationHelper+PopupLocation[]");
         var showModeType = type.Assembly.GetType("UnityEditor.ShowMode");
 
-        var mf = type.GetMethod("ShowAsDropDown", BindingFlags.NonPublic, null, new Type[]
+        var mf = type.GetMethod("ShowAsDropDown", BindingFlags.NonPublic | BindingFlags.Instance, null, new Type[]
         {
             typeof(Rect), typeof(Vector2), popupLocationArrayType, showModeType
         }, null);
-
         mf.Invoke(window, new object[] { buttonRect, windowSize, null, Enum.Parse(type.Assembly.GetType("UnityEditor.ShowMode"), "PopupMenuWithKeyboardFocus") });
     }
 

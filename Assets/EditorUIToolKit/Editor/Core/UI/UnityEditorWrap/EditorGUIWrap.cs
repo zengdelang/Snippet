@@ -8,6 +8,9 @@ public class EditorGUIWrap
     public delegate string ToolbarSearchFieldDelegate(int id, Rect position, string text, bool showWithPopupArrow);
     protected static ToolbarSearchFieldDelegate s_ToolbarSearchFieldDelegate;
 
+    public delegate string SearchFieldDelegate(Rect position, string text);
+    protected static SearchFieldDelegate s_SearchFieldDelegate;
+
     private static MethodInfo s_DoTextFieldMF;
     private static TextEditor s_RecycledEditor;
 
@@ -68,5 +71,24 @@ public class EditorGUIWrap
 
         s_ToolbarSearchFieldDelegate = action;
         return s_ToolbarSearchFieldDelegate(id, position, text, showWithPopupArrow);
+    }
+
+    public static string SearchField(Rect position, string text)
+    {
+        if (s_SearchFieldDelegate != null)
+            return s_SearchFieldDelegate(position, text);
+
+        Type type = typeof(EditorGUI);
+        var mf = type.GetMethod("SearchField", BindingFlags.NonPublic | BindingFlags.Static, null, new Type[]
+        {
+            typeof(Rect),typeof(string)
+        }, null);
+
+        var action = (SearchFieldDelegate)Delegate.CreateDelegate(typeof(SearchFieldDelegate), mf);
+        if (action == null)
+            throw new NullReferenceException("action");
+
+        s_SearchFieldDelegate = action;
+        return s_SearchFieldDelegate(position, text);
     }
 }
