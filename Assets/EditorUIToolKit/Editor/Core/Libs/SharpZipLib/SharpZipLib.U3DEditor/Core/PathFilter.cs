@@ -114,7 +114,7 @@ namespace SharpZipLib.U3DEditor.Core
 			bool result = base.IsMatch(name);
 
 			if (result) {
-				var fileInfo = new FileInfo(name);
+				var fileInfo = new System.IO.FileInfo(name);
 				result =
 					(MinSize <= fileInfo.Length) &&
 					(MaxSize >= fileInfo.Length) &&
@@ -235,7 +235,7 @@ namespace SharpZipLib.U3DEditor.Core
 			bool result = base.IsMatch(name);
 
 			if (result) {
-				var fileInfo = new FileInfo(name);
+				var fileInfo = new System.IO.FileInfo(name);
 				long length = fileInfo.Length;
 				result =
 					(MinSize <= length) &&

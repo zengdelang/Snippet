@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using UnityEngine;
 
-public struct FileInfos
+public struct FileInfo
 {
     public string FullName;
     public string Name;
@@ -13,9 +13,9 @@ public struct FileInfos
 
 public class EditorFileUtility
 {
-    public static List<FileInfos> FilterDirectory(string path, string[] extNames,bool includeChilrenDir = true)
+    public static List<FileInfo> FilterDirectory(string path, string[] extNames,bool includeChilrenDir = true)
     {
-        List<FileInfos> result = new List<FileInfos>();
+        List<FileInfo> result = new List<FileInfo>();
         if (!Directory.Exists(path))
         {
             return null;
@@ -50,7 +50,7 @@ public class EditorFileUtility
                 {
                     if (extName.ToLower() == fi.Extension.ToLower())
                     {
-                        FileInfos efi = new FileInfos();
+                        FileInfo efi = new FileInfo();
                         efi.FullName = fi.FullName;
                         efi.Name = fi.Name;
                         result.Add(efi);
@@ -252,7 +252,7 @@ public class EditorFileUtility
             var newPath = Path.Combine(Directory.GetParent(filePath).FullName, newName);
             if (!File.Exists(newPath))
             {
-                FileInfo fi = new FileInfo(filePath);
+                System.IO.FileInfo fi = new System.IO.FileInfo(filePath);
                 fi.MoveTo(newPath);
                 result = true;
             }     

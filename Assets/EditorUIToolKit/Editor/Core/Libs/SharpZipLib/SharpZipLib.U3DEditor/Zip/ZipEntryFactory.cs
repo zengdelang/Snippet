@@ -189,9 +189,9 @@ namespace SharpZipLib.U3DEditor.Zip
 			int externalAttributes = 0;
 			bool useAttributes = (setAttributes_ != 0);
 
-			FileInfo fi = null;
+			System.IO.FileInfo fi = null;
 			if (useFileSystem) {
-				fi = new FileInfo(fileName);
+				fi = new System.IO.FileInfo(fileName);
 			}
 
 			if ((fi != null) && fi.Exists) {

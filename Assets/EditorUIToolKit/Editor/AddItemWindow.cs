@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using EUTK;
 using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -110,6 +111,8 @@ public class AddItemWindow : EditorWindow
         s_AddItemWindow.m_ClickedAction = clickedAction;
         s_AddItemWindow.m_ItemSearchKey = searchStringKey;
         s_AddItemWindow.Init(rect);
+
+        ItemPathGenerator.GetItemInfo("D:/GitHub/test", ".txt");
         return true;
     }
 

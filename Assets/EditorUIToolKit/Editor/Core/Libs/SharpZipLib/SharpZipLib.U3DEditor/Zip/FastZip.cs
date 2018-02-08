@@ -610,7 +610,7 @@ namespace SharpZipLib.U3DEditor.Zip
 			}
 		}
 
-		static int MakeExternalAttributes(FileInfo info)
+		static int MakeExternalAttributes(System.IO.FileInfo info)
 		{
 			return (int)info.Attributes;
 		}

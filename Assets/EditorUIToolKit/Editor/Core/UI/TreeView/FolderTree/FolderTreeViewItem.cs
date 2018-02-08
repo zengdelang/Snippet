@@ -84,7 +84,7 @@ public class FolderTreeViewItem : TreeViewItem
         }
         else
         {
-            FileInfo fi = new FileInfo(Path);
+            System.IO.FileInfo fi = new System.IO.FileInfo(Path);
             var targetPath = System.IO.Path.Combine(parent.Path, System.IO.Path.GetFileName(Path)).Replace("/", "\\");
             if (targetPath != Path)
             {

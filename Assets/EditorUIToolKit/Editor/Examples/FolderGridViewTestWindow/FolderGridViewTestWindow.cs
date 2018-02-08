@@ -383,7 +383,7 @@ public class FolderGridViewTestWindow : ViewGroupEditorWindow
         folderItem.Id = dataContainer.GetAutoID();
         var newPath = EditorFileUtility.GetNewFile(parentItem.Path, "New Txt", "txt");
         folderItem.Path = newPath;
-        var fi = new FileInfo(newPath);
+        var fi = new System.IO.FileInfo(newPath);
         File.Create(newPath).Close();
         folderItem.DisplayName = Path.GetFileNameWithoutExtension(fi.Name);
 

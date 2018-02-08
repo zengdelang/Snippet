@@ -533,7 +533,7 @@ namespace SharpZipLib.U3DEditor.Tar
 				EnsureDirectoryExists(parentDirectory);
 
 				bool process = true;
-				var fileInfo = new FileInfo(destFile);
+				var fileInfo = new System.IO.FileInfo(destFile);
 				if (fileInfo.Exists) {
 					if (keepOldFiles) {
 						OnProgressMessageEvent(entry, "Destination file already exists");
@@ -675,7 +675,7 @@ namespace SharpZipLib.U3DEditor.Tar
 						}
 					}
 
-					entry.Size = new FileInfo(tempFileName).Length;
+					entry.Size = new System.IO.FileInfo(tempFileName).Length;
 					entryFilename = tempFileName;
 				}
 			}

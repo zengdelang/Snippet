@@ -385,7 +385,7 @@ namespace SharpZipLib.U3DEditor.Tar
 			} else {
 				header.Mode = 33216; // Magic number for security access for a UNIX filesystem
 				header.TypeFlag = TarHeader.LF_NORMAL;
-				header.Size = new FileInfo(file.Replace('/', Path.DirectorySeparatorChar)).Length;
+				header.Size = new System.IO.FileInfo(file.Replace('/', Path.DirectorySeparatorChar)).Length;
 			}
 
 			header.ModTime = System.IO.File.GetLastWriteTime(file.Replace('/', Path.DirectorySeparatorChar)).ToUniversalTime();
