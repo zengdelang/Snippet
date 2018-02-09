@@ -111,8 +111,6 @@ public class AddItemWindow : EditorWindow
         s_AddItemWindow.m_ClickedAction = clickedAction;
         s_AddItemWindow.m_ItemSearchKey = searchStringKey;
         s_AddItemWindow.Init(rect);
-
-        ItemPathGenerator.GetItemInfo("D:/GitHub/test", ".txt");
         return true;
     }
 
@@ -129,7 +127,11 @@ public class AddItemWindow : EditorWindow
     [MenuItem("Tools/Eaxamples/ComponentWindow", false, 0)]
     public static void ShowCoreConfigTool()
     {
-        Show(new Rect(100, 0, 320, 320), "itemSearchString", Unsupported.GetSubmenus("Component"), null, null, null);
+        var itemInfo = ItemPathGenerator.GetItemInfo("D:/GitHub/test", ".txt");
+        Show(new Rect(100, 0, 320, 320), "itemSearchString", itemInfo.pathArray, null, itemInfo.infoArray, ((s, o) =>
+        {
+            Debug.LogError(o);
+        } ));
     }
 
     private void CreateComponentTree()
@@ -163,7 +165,7 @@ public class AddItemWindow : EditorWindow
             object info = null;
             if (m_ItemInfoArray != null && i < m_ItemInfoArray.Length)
             {
-                info = m_ItemTexture2DArray[i];
+                info = m_ItemInfoArray[i];
             }
 
             list2.Add(new ItemElement(list.Count, strArray3[strArray3.Length - 1], menuPath, texture, info));
