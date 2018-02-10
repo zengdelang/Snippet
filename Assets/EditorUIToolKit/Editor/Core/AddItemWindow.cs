@@ -1,10 +1,39 @@
 ﻿using System;
 using System.Collections.Generic;
-using EUTK;
 using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
+/*  使用方法一:
+    GUIContent label = new GUIContent("设置");
+    Rect rect = GUILayoutUtility.GetRect(label, "Button"); 
+    if (GUI.Button(rect, label))
+    {
+        //var deltaX = (rect.width - 230) / 2;
+        //rect.x += deltaX;
+        //rect.width = 230;
+        if (AddItemWindow.Show(rect, "ssss"))
+        {
+            AddItemWindow.s_AddItemWindow.Init(rect,
+                ItemPathGenerator.GetItemInfo("D:\\GitHub\\test\\Assets", ".txt").pathArray, null, null, null);
+        }
+    }
+*/
+/*  使用方法二:
+    EditorGUILayout.BeginHorizontal();
+    GUILayout.FlexibleSpace();
+    GUIContent addComponentLabel = new GUIContent("Add Component");
+    Rect rect = GUILayoutUtility.GetRect(addComponentLabel, "AC Button");
+    if (EditorGUI.DropdownButton(rect, addComponentLabel, FocusType.Passive, "AC Button") && AddItemWindow.Show(rect, "ssss"))
+    {
+        //初始化不能放在Show里面，GetItemInfo的操作可能超过50ms，这样再次点击就会又立刻显示出来
+        AddItemWindow.s_AddItemWindow.Init(rect,
+            ItemPathGenerator.GetItemInfo("D:\\GitHub\\test\\Assets", ".txt").pathArray, null, null, null);
+        GUIUtility.ExitGUI();
+    }
+    GUILayout.FlexibleSpace();
+    EditorGUILayout.EndHorizontal();
+ */
 public class AddItemWindow : EditorWindow
 {
     private List<GroupElement> m_Stack = new List<GroupElement>();
@@ -21,11 +50,11 @@ public class AddItemWindow : EditorWindow
     private const int kHeaderHeight = 30;
     private const int kWindowHeight = 320;
 
-    private string m_ItemSearchKey = "";
+    private static string s_ItemSearchKey = "";
 
     private static Styles s_Styles;
     private static long s_LastClosedTime;
-    private static AddItemWindow s_AddItemWindow;
+    public static AddItemWindow s_AddItemWindow;
 
     private string[] m_ItemPathArray;
     private Texture2D[] m_ItemTexture2DArray;
@@ -73,24 +102,21 @@ public class AddItemWindow : EditorWindow
     private void OnEnable()
     {
         m_DirtyList = true;
-        m_Search = EditorPrefs.GetString(m_ItemSearchKey, "");
+        m_Search = EditorPrefs.GetString(s_ItemSearchKey, "");
     }
 
     private void OnDisable()
     {
         s_LastClosedTime = DateTime.Now.Ticks / 10000L;
+        s_AddItemWindow = null;
     }
 
     /// <summary>
-    /// 
+    /// 显示窗口
     /// </summary>
     /// <param name="rect"></param>
-    /// <param name="itemPathArray">item的路径数据，路径格式： xxx/yyy/zzz</param>
-    /// <param name="itemTexture2DArray">item的图片</param>
-    /// <param name="itemInfoArray">item的额外数据，传入点击回调</param>
-    /// <param name="clickedAction">点击item的回调</param>
-    /// <returns></returns>
-    internal static bool Show(Rect rect, string searchStringKey, string[] itemPathArray, Texture2D[] itemTexture2DArray, object[] itemInfoArray, Action<string, object> clickedAction)
+    /// <param name="searchStringKey">保存搜索值的键</param>
+    public static bool Show(Rect rect, string searchStringKey)
     {
         Object[] objectsOfTypeAll = Resources.FindObjectsOfTypeAll(typeof(AddItemWindow));
         if (objectsOfTypeAll.Length > 0)
@@ -98,40 +124,38 @@ public class AddItemWindow : EditorWindow
             ((EditorWindow) objectsOfTypeAll[0]).Close();
             return false;
         }
+
         if (DateTime.Now.Ticks / 10000L < s_LastClosedTime + 50L)
             return false;
 
         if(Event.current != null)
             Event.current.Use();
+
+        s_ItemSearchKey = searchStringKey;
+
+        if (s_AddItemWindow == null)
+            s_AddItemWindow = CreateInstance<AddItemWindow>();
         
-        s_AddItemWindow = CreateInstance<AddItemWindow>();
+        return true;
+    }
+
+    /// <param name="itemPathArray">item的路径数据，路径格式： xxx/yyy/zzz</param>
+    /// <param name="itemTexture2DArray">item的图片</param>
+    /// <param name="itemInfoArray">item的额外数据，传入点击回调</param>
+    /// <param name="clickedAction">点击item的回调</param>
+    public void Init(Rect buttonRect, string[] itemPathArray, Texture2D[] itemTexture2DArray, object[] itemInfoArray, Action<string, object> clickedAction)
+    {
         s_AddItemWindow.m_ItemPathArray = itemPathArray;
         s_AddItemWindow.m_ItemTexture2DArray = itemTexture2DArray;
         s_AddItemWindow.m_ItemInfoArray = itemInfoArray;
         s_AddItemWindow.m_ClickedAction = clickedAction;
-        s_AddItemWindow.m_ItemSearchKey = searchStringKey;
-        s_AddItemWindow.Init(rect);
-        return true;
-    }
 
-    private void Init(Rect buttonRect)
-    {
         buttonRect = GUIUtilityWrap.GUIToScreenRect(buttonRect);
         CreateComponentTree();
         EditorWindowWrap.ShowAsDropDown(this, buttonRect, new Vector2(buttonRect.width, kWindowHeight));
         Focus();
         EditorWindowWrap.AddToAuxWindowList(this);
         wantsMouseMove = true;
-    }
-
-    [MenuItem("Tools/Eaxamples/ComponentWindow", false, 0)]
-    public static void ShowCoreConfigTool()
-    {
-        var itemInfo = ItemPathGenerator.GetItemInfo("D:/GitHub/test", ".txt");
-        Show(new Rect(100, 0, 320, 320), "itemSearchString", itemInfo.pathArray, null, itemInfo.infoArray, ((s, o) =>
-        {
-            Debug.LogError(o);
-        } ));
     }
 
     private void CreateComponentTree()
@@ -157,7 +181,7 @@ public class AddItemWindow : EditorWindow
             }
 
             Texture2D texture = null;
-            if (m_ItemTexture2DArray != null && i < m_ItemPathArray.Length)
+            if (m_ItemTexture2DArray != null && i < m_ItemTexture2DArray.Length)
             {
                 texture = m_ItemTexture2DArray[i];
             }
@@ -165,11 +189,11 @@ public class AddItemWindow : EditorWindow
             object info = null;
             if (m_ItemInfoArray != null && i < m_ItemInfoArray.Length)
             {
-                info = m_ItemInfoArray[i];
+                info = m_ItemInfoArray[i]; 
             }
 
             list2.Add(new ItemElement(list.Count, strArray3[strArray3.Length - 1], menuPath, texture, info));
-        }
+        } 
 
         m_Tree = list2.ToArray();
         if (m_Stack.Count == 0)
@@ -192,11 +216,12 @@ public class AddItemWindow : EditorWindow
         HandleKeyboard();
         GUILayout.Space(7f);
 
-        EditorGUI.FocusTextInControl(m_ItemSearchKey);
+
+        EditorGUI.FocusTextInControl(s_ItemSearchKey);
         Rect rect = GUILayoutUtility.GetRect(10f, 20f);
         rect.x += 8f;
         rect.width -= 16f;
-        GUI.SetNextControlName(m_ItemSearchKey);
+        GUI.SetNextControlName(s_ItemSearchKey);
 
         string str = EditorGUIWrap.SearchField(rect, m_DelayedSearch ?? m_Search);
         if (str != m_Search || m_DelayedSearch != null)
@@ -204,7 +229,7 @@ public class AddItemWindow : EditorWindow
             if (!isAnimating)
             {
                 m_Search = m_DelayedSearch ?? str;
-                EditorPrefs.SetString("ComponentSearchString", m_Search);
+                EditorPrefs.SetString(s_ItemSearchKey, m_Search);
                 RebuildSearch();
                 m_DelayedSearch = null;
             }
