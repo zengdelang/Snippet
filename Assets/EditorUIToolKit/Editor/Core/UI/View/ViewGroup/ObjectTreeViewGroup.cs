@@ -186,7 +186,7 @@ public class ObjectTreeViewGroup : ViewGroup
             foreach (var id in m_TreeView.state.selectedIDs)
             {
                 var item = m_TreeView.data.FindItem(id);
-                var newItem = JsonReader.Deserialize(JsonWriter.Serialize(item, true), true) as TreeViewItem;
+                var newItem = JsonReader.Deserialize(JsonWriter.Serialize(item, new JsonWriterSettings() { MaxDepth = Int32.MaxValue }), true) as TreeViewItem;
                 item.parent.AddChild(newItem);
                 UpdateItemInfo(newItem, idList, true);
             }

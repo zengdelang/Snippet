@@ -787,7 +787,7 @@ public class FolderGridViewGroup : ViewGroup
                 {
                     var newPath = EditorFileUtility.GetNewFolder(item.Path);
                     FileUtil.CopyFileOrDirectory(item.Path, newPath);
-                    var newItem = JsonReader.Deserialize(JsonWriter.Serialize(treeItem, true, new JsonWriterSettings() { MaxDepth = Int32.MaxValue }), true) as FolderTreeViewItem;
+                    var newItem = JsonReader.Deserialize(JsonWriter.Serialize(treeItem, new JsonWriterSettings() { MaxDepth = Int32.MaxValue }), true) as FolderTreeViewItem;
                     
                     newItem.id = m_FolderTreeViewGroup.GetDataContainer().GetAutoID();
                     newItem.FileList = null;
@@ -797,7 +797,7 @@ public class FolderGridViewGroup : ViewGroup
                     newItem.Path = newPath;
                     newItem.displayName = new DirectoryInfo(newPath).Name;
 
-                    var newGridItem = JsonReader.Deserialize(JsonWriter.Serialize(item, true, new JsonWriterSettings() { MaxDepth = Int32.MaxValue }), item.GetType(), true) as FolderGridItem;
+                    var newGridItem = JsonReader.Deserialize(JsonWriter.Serialize(item, new JsonWriterSettings() { MaxDepth = Int32.MaxValue }), item.GetType(), true) as FolderGridItem;
                     newGridItem.Id = newItem.id;
                     newGridItem.Path = newItem.Path;
                     newGridItem.DisplayName = newItem.displayName;
@@ -814,14 +814,14 @@ public class FolderGridViewGroup : ViewGroup
                 {
                     var newPath = EditorFileUtility.GetNewFile(item.Path);
                     FileUtil.CopyFileOrDirectory(item.Path, newPath);
-                    var newItem = JsonReader.Deserialize(JsonWriter.Serialize(treeItem, true, new JsonWriterSettings() { MaxDepth = Int32.MaxValue }), true) as FolderTreeViewItem;
+                    var newItem = JsonReader.Deserialize(JsonWriter.Serialize(treeItem, new JsonWriterSettings() { MaxDepth = Int32.MaxValue }), true) as FolderTreeViewItem;
                     newItem.id = m_FolderTreeViewGroup.GetDataContainer().GetAutoID();
                     idList.Add(newItem.id);
                     newItem.Path = newPath;
                     newItem.displayName = Path.GetFileNameWithoutExtension(newPath);
                     parentTreeItem.FileList.Add(newItem);
 
-                    var newGridItem = JsonReader.Deserialize(JsonWriter.Serialize(item, true, new JsonWriterSettings() { MaxDepth = Int32.MaxValue }), item.GetType(), true) as FolderGridItem;
+                    var newGridItem = JsonReader.Deserialize(JsonWriter.Serialize(item, new JsonWriterSettings() { MaxDepth = Int32.MaxValue }), item.GetType(), true) as FolderGridItem;
                     newGridItem.Id = newItem.id;
                     newGridItem.Path = newItem.Path;
                     newGridItem.DisplayName = newItem.displayName;

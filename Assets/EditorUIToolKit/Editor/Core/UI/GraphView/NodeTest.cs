@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using JsonFx.U3DEditor;
 using NodeCanvas.Editor;
@@ -65,7 +66,6 @@ public abstract class NodeTest
         set { m_CustomName = value; }
     }
 
-    ///The node tag. Useful for finding nodes through code
     public string tag
     {
         get { return m_Tag; }
@@ -88,9 +88,9 @@ public abstract class NodeTest
     abstract public int maxInConnections { get; }
 
 
-    public abstract System.Type outConnectionType { get; }
+    public abstract Type outConnectionType { get; }
 
-    public static NodeTest Create(GraphTest targetGraph, System.Type nodeType, Vector2 pos)
+    public static NodeTest Create(GraphTest targetGraph, Type nodeType, Vector2 pos)
     {
         if (targetGraph == null)
         {
@@ -98,7 +98,7 @@ public abstract class NodeTest
             return null;
         }
 
-        var newNode = (NodeTest) System.Activator.CreateInstance(nodeType);
+        var newNode = (NodeTest) Activator.CreateInstance(nodeType);
         Undo.RecordObject(targetGraph, "Create Node");
 
         newNode.graph = targetGraph;
@@ -141,7 +141,7 @@ public abstract class NodeTest
     protected Color restingColor = new Color(0.7f, 0.7f, 1f, 0.8f);
     protected Vector2 minSize = new Vector2(100, 20);
 
-    [System.NonSerialized]
+    [NonSerialized]
     private string m_NodeName;
 
     virtual public string name
@@ -155,7 +155,7 @@ public abstract class NodeTest
 
             if (string.IsNullOrEmpty(m_NodeName))
             {
-                var nameAtt = this.GetType().RTGetAttribute<NameAttribute>(false);
+                var nameAtt = GetType().RTGetAttribute<NameAttribute>(false);
                 m_NodeName = nameAtt != null ? nameAtt.name : GetType().FriendlyName().SplitCamelCase();
             }
             return m_NodeName;
@@ -306,9 +306,11 @@ public abstract class NodeTest
         GUI.Label(rect, id + " | " + (graph.allNodes.IndexOf(this) + 1));
     }
 
-    public virtual void OnDestroy() { }
+    public virtual void OnDestroy()
+    {
+        
+    }
 
-    //Draw the window
     protected virtual void DrawNodeWindow(Vector2 canvasMousePos, float zoomFactor)
     {  
         GUI.color = isActive ? Color.white : new Color(0.9f, 0.9f, 0.9f, 0.8f);
@@ -361,8 +363,7 @@ public abstract class NodeTest
                 GUI.color = Color.white;
             }
 
-            GUILayout.Label(string.Format("<b><size=12><color=#{0}>{1}</color></size></b>", hexColor, name),
-                centerLabel);
+            GUILayout.Label(string.Format("<b><size=12><color=#{0}>{1}</color></size></b>", hexColor, name), centerLabel);
         }
 
 
@@ -388,7 +389,8 @@ public abstract class NodeTest
 
             if (!e.control)
             {
-                graph.currentSelection = id;
+                graph.multiSelection.Clear();
+                graph.multiSelection.Add(id);
             }
 
             if (e.control)
@@ -437,23 +439,26 @@ public abstract class NodeTest
         GUI.skin.label.alignment = TextAnchor.UpperLeft;
     }
 
-    //Handles and shows the right click mouse button for the node context menu
+    /// <summary>
+    /// 右键弹出菜单处理
+    /// </summary>
+    /// <param name="e"></param>
     void HandleContextMenu(Event e)
     {
-        var isContextClick = (e.type == EventType.MouseUp && e.button == 1) ||
-                             (e.control && e.type == EventType.MouseUp || e.type == EventType.ContextClick);
+        var isContextClick = e.type == EventType.MouseUp && e.button == 1;
         if (/*graph.allowClick &&*/ isContextClick)
         {
-            //Multiselection menu
-            if (graph.multiSelection.Count > 1)
+            if (graph.multiSelection.Count > 1)  
             {
+                //多个结点被选中的处理
                 var menu = new GenericMenu();
                 menu.AddItem(new GUIContent("Duplicate Selected Nodes"), false, () =>
                 {
-                //    var newNodes = Graph.CopyNodesToGraph(Graph.multiSelection.OfType<Node>().ToList(), graph);
-                 //   Graph.multiSelection = newNodes.Cast<object>().ToList();
+                    var idList = new List<int>();
+                    graph.CopyNodesToGraph(graph.GetAllSelectedNodes(), idList);
+                    graph.multiSelection = idList;
                 });
-                ///    menu.AddItem(new GUIContent("Copy Selected Nodes"), false, () => { copiedNodes = Graph.multiSelection.OfType<Node>().ToArray(); });
+                menu.AddItem(new GUIContent("Copy Selected Nodes"), false, () => { graph.CopiedNodes = graph.GetAllSelectedNodes().ToArray(); });
                 menu.AddSeparator("/");
                 menu.AddItem(new GUIContent("Delete Selected Nodes"), false, () =>
                 {
@@ -463,11 +468,12 @@ public abstract class NodeTest
                 graph.PostGUI += () => { menu.ShowAsContext(); }; 
                 e.Use();
             }
-            else                 //Single node menu
+            else             
             {
+                //单个结点被选中的处理
                 var menu = new GenericMenu();
-                menu.AddItem(new GUIContent("Duplicate (CTRL+D)"), false, () => { });//graph.currentSelection = Duplicate(graph); });
-                //menu.AddItem(new GUIContent("Copy Node"), false, () => { copiedNodes = new Node[] { this }; });
+                menu.AddItem(new GUIContent("Duplicate (CTRL+D)"), false, () => { graph.currentSelection = Duplicate(graph).id; });
+                menu.AddItem(new GUIContent("Copy Node"), false, () => { graph.CopiedNodes = new NodeTest[] { this }; });
 
                 if (inConnections.Count > 0)
                     menu.AddItem(new GUIContent(isActive ? "Disable" : "Enable"), false, () => { SetActive(!isActive); });
@@ -542,6 +548,26 @@ public abstract class NodeTest
             tagRect.x = nodeRect.x - 22;
             GUI.DrawTexture(tagRect, EditorUtils.tagIcon);
         }
+    }
+
+    public NodeTest Duplicate(GraphTest targetGraph)
+    {
+        if (targetGraph == null)
+        {
+            Debug.LogError("Can't duplicate a Node without providing a Target Graph");
+            return null;
+        }
+    
+        Undo.RecordObject(targetGraph, "Duplicate");
+
+        var newNode = JsonReader.Deserialize(JsonWriter.Serialize(this, new JsonWriterSettings() { MaxDepth = Int32.MaxValue }), true) as NodeTest;
+        newNode.id = targetGraph.GetAutoId();
+        targetGraph.allNodes.Add(newNode);
+        newNode.inConnections.Clear();
+        newNode.outConnections.Clear();
+        newNode.nodePosition += new Vector2(50, 50);
+        newNode.graph = targetGraph;
+        return newNode;
     }
 
     //The inspector of the node shown in the editor panel or else.
@@ -670,9 +696,6 @@ public abstract class NodeTest
     {
         return menu;
     }
-
-    
-
 
     //Draw the connections line from this node, to all of its children. This is the default hierarchical tree style. Override in each system's base node class.
     protected virtual void DrawNodeConnections(Rect drawCanvas, bool fullDrawPass, Vector2 canvasMousePos, float zoomFactor)

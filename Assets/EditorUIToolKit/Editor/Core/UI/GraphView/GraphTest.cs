@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using JsonFx.U3DEditor;
 using NodeCanvas.Editor;
@@ -33,6 +34,7 @@ public abstract class GraphTest : BaseGraph
     private Vector2 nodeInspectorScrollPos;
 
     public int keyboardControl;
+    public NodeTest[] CopiedNodes;
 
     public Vector2 translation
     {
@@ -57,6 +59,11 @@ public abstract class GraphTest : BaseGraph
 
     public Action PostGUI { get; set; }
     public abstract Type baseNodeType { get; }
+
+    public int GetAutoId()
+    {
+        return ++m_AutoId;
+    }
 
     public T AddNode<T>() where T : NodeTest
     {
@@ -84,7 +91,7 @@ public abstract class GraphTest : BaseGraph
         var newNode = NodeTest.Create(this, nodeType, pos);
         Undo.RecordObject(this, "New Node");
 
-        newNode.id = ++m_AutoId;
+        newNode.id = GetAutoId();
         allNodes.Add(newNode);
         return newNode;
     }
@@ -188,12 +195,29 @@ public abstract class GraphTest : BaseGraph
     {
         foreach (var node in allNodes)
         {
-            if (node.id == currentSelection)
+            if (node.id == id)
             {
                 return node; ;
             }
         }
         return null;
+    }
+
+    public List<NodeTest> GetAllSelectedNodes()
+    {
+        List<NodeTest> nodeList = new List<NodeTest>();
+        if(multiSelection != null)
+        {
+            foreach (var id in multiSelection)
+            {
+                var node = GetNode(id);
+                if (node != null)
+                {
+                    nodeList.Add(node);
+                }
+            }
+        }
+        return nodeList;
     }
 
     protected ConnectionTest GetConnection(int id)
@@ -343,16 +367,52 @@ public abstract class GraphTest : BaseGraph
             //Duplicate
             if (e.keyCode == KeyCode.D && e.control)
             {
-                /*if (multiSelection != null && multiSelection.Count > 0)
+                if (multiSelection != null && multiSelection.Count > 0)
                 {
-                    var newNodes = CopyNodesToGraph(multiSelection.OfType<Node>().ToList(), this);
-                    multiSelection = newNodes.Cast<object>().ToList();
+                    var idList = new List<int>();
+                    CopyNodesToGraph(GetAllSelectedNodes(), idList);
+                    multiSelection = idList;
                 }
                 if (selectedNode != null)
                 {
-                    currentSelection = selectedNode.Duplicate(this);
-                }*/
-                //Connections can't be duplicated by themselves. They do so as part of multiple node duplication though.
+                    currentSelection = selectedNode.Duplicate(this).id;
+                }
+                e.Use();
+            }
+
+            if (e.keyCode == KeyCode.C && e.control)
+            {
+                if(multiSelection != null && multiSelection.Count > 1)
+                    CopiedNodes = GetAllSelectedNodes().ToArray();
+                else
+                {
+                    var node = GetNode(currentSelection);
+                    if(node != null)
+                        CopiedNodes = new NodeTest[] { node };
+                }
+                e.Use();
+            }
+
+            if (e.keyCode == KeyCode.V && e.control && CopiedNodes != null && CopiedNodes.Length > 0 && CopiedNodes[0].GetType().IsSubclassOf(baseNodeType))
+            {
+                if (CopiedNodes.Length == 1)
+                {
+                    var newNode = CopiedNodes[0].Duplicate(this);
+                    newNode.nodePosition = canvasMousePos;
+                    currentSelection = newNode.id;
+                }
+                else if (CopiedNodes.Length > 1)
+                {
+                    var idList = new List<int>();
+                    var newNodes = CopyNodesToGraph(CopiedNodes.ToList(), idList);
+                    var diff = newNodes[0].nodeRect.center - canvasMousePos;
+                    newNodes[0].nodePosition = canvasMousePos;
+                    for (var i = 1; i < newNodes.Count; i++)
+                    {
+                        newNodes[i].nodePosition -= diff;
+                    }
+                    multiSelection = idList;
+                }
                 e.Use();
             }
         }
@@ -361,31 +421,32 @@ public abstract class GraphTest : BaseGraph
         if (e.type == EventType.ContextClick)
         {
             var menu = GetAddNodeMenu(canvasMousePos);
-            if (Node.copiedNodes != null && Node.copiedNodes[0].GetType().IsSubclassOf(baseNodeType))
+            if (CopiedNodes != null && CopiedNodes.Length > 0 && CopiedNodes[0].GetType().IsSubclassOf(baseNodeType))
             {
                 menu.AddSeparator("/");
-                if (Node.copiedNodes.Length == 1)
+                if (CopiedNodes.Length == 1) 
                 {
-                    menu.AddItem(new GUIContent(string.Format("Paste Node ({0})", Node.copiedNodes[0].GetType().Name)), false, () =>
+                    menu.AddItem(new GUIContent(string.Format("Paste Node ({0})", CopiedNodes[0].GetType().Name)), false, () =>
                     {
-                   /*     var newNode = Node.copiedNodes[0].Duplicate(this);
+                        var newNode = CopiedNodes[0].Duplicate(this);
                         newNode.nodePosition = canvasMousePos;
-                        currentSelection = newNode;*/
+                        currentSelection = newNode.id;
                     });
 
                 }
-                else if (Node.copiedNodes.Length > 1)
+                else if (CopiedNodes.Length > 1)
                 {
-                    menu.AddItem(new GUIContent(string.Format("Paste Nodes ({0})", Node.copiedNodes.Length.ToString())), false, () =>
+                    menu.AddItem(new GUIContent(string.Format("Paste Nodes ({0})", CopiedNodes.Length)), false, () =>
                     {
-                      /*  var newNodes = Graph.CopyNodesToGraph(Node.copiedNodes.ToList(), this);
+                        var idList = new List<int>();
+                        var newNodes = CopyNodesToGraph(CopiedNodes.ToList(), idList);
                         var diff = newNodes[0].nodeRect.center - canvasMousePos;
                         newNodes[0].nodePosition = canvasMousePos;
                         for (var i = 1; i < newNodes.Count; i++)
                         {
                             newNodes[i].nodePosition -= diff;
                         }
-                        multiSelection = newNodes.Cast<object>().ToList();*/
+                        multiSelection = idList;
                     });
                 }
             }
@@ -394,6 +455,40 @@ public abstract class GraphTest : BaseGraph
             e.Use();
         }
     }
+
+    public List<NodeTest> CopyNodesToGraph(List<NodeTest> nodes, List<int> idList)
+    {
+        var newNodes = new List<NodeTest>();
+        var linkInfo = new Dictionary<ConnectionTest, KeyValuePair<int, int>>();
+
+        //duplicate all nodes first
+        foreach (var node in nodes)
+        {
+            var newNode = node.Duplicate(this);
+            newNodes.Add(newNode);
+            idList.Add(newNode.id);
+
+            //store the out connections that need dulpicate along with the indeces of source and target
+            foreach (var c in node.outConnections)
+            {
+                linkInfo[c] = new KeyValuePair<int, int>(nodes.IndexOf(c.sourceNode), nodes.IndexOf(c.targetNode));
+            }
+        }
+
+        //duplicate all connections that we stored as 'need duplicating' providing new source and target
+        foreach (var linkPair in linkInfo)
+        {
+            if (linkPair.Value.Value != -1)
+            { //we check this to see if the target node is part of the duplicated nodes since IndexOf returns -1 if element is not part of the list
+                var newSource = newNodes[linkPair.Value.Key];
+                var newTarget = newNodes[linkPair.Value.Value];
+                linkPair.Key.Duplicate(newSource, newTarget);
+            }
+        }
+
+        return newNodes;
+    }
+
 
     [SerializeField]
     private  List<int> m_MultiSelectionIds = new List<int>();

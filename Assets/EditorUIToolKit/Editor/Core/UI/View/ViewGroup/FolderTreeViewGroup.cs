@@ -323,7 +323,7 @@ public class FolderTreeViewGroup : ViewGroup
                         continue;
 
                     var item = m_TreeView.data.FindItem(id);
-                    var newItem = JsonReader.Deserialize(JsonWriter.Serialize(item, true,new JsonWriterSettings(){MaxDepth = Int32.MaxValue}), true) as FolderTreeViewItem;
+                    var newItem = JsonReader.Deserialize(JsonWriter.Serialize(item,new JsonWriterSettings(){MaxDepth = Int32.MaxValue}), true) as FolderTreeViewItem;
                     var newPath = EditorFileUtility.GetNewFolder(newItem.Path);
                    
                     FileUtil.CopyFileOrDirectory(newItem.Path, newPath);

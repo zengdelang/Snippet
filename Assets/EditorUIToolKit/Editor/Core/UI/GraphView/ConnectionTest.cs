@@ -1,4 +1,5 @@
-﻿using JsonFx.U3DEditor;
+﻿using System;
+using JsonFx.U3DEditor;
 using ParadoxNotion.Design;
 using UnityEditor;
 using UnityEngine;
@@ -16,8 +17,13 @@ public abstract class ConnectionTest
 
     protected const float RELINK_DISTANCE_SNAP = 20f;
 
-    [SerializeField] protected NodeTest m_SourceNode;
-    [SerializeField] protected NodeTest m_TargetNode;
+    //这里序列化就会有问题的，无限循环，如果是反序列化需要处理下
+    //考虑保存id,如果m_SourceNode = null， 就从graph里面找
+    //在反序列化完成后，遍历所有node，设置所有connection的source 和 target node
+    //直接在node的OnGUI里面判断Connection的source和targetNode是不是空的？
+    //比较好的做法应该是Graph开始绘制前，判断下Connection的source和target是不是为空，如果是重新修复所有的node的connnetion
+      protected NodeTest m_SourceNode;
+      protected NodeTest m_TargetNode;
     [SerializeField] protected bool m_IsDisabled;
     [SerializeField] protected int m_Id;
     [SerializeField] protected bool m_InfoCollapsed;
@@ -95,11 +101,6 @@ public abstract class ConnectionTest
     {
         get { return sourceNode.graph; }
     }
- 
-    public ConnectionTest()
-    {
-
-    }
 
     public static ConnectionTest Create(NodeTest source, NodeTest target, int sourceIndex)
     {
@@ -119,27 +120,23 @@ public abstract class ConnectionTest
         newConnection.OnValidate(sourceIndex, target.inConnections.IndexOf(newConnection));
         return newConnection;
     }
-    
+
     public ConnectionTest Duplicate(NodeTest newSource, NodeTest newTarget)
     {
-            if (newSource == null || newTarget == null)
-            {
-                Debug.LogError("Can't Duplicate a Connection without providing NewSource and NewTarget Nodes");
-                return null;
-            }
+        if (newSource == null || newTarget == null)
+        {
+            Debug.LogError("Can't Duplicate a Connection without providing NewSource and NewTarget Nodes");
+            return null;
+        }
 
-            //deep clone
-          /*  var newConnection = JSONSerializer.Deserialize<Connection>(JSONSerializer.Serialize(typeof(Connection), this));
-            Undo.RecordObject(newSource.graph, "Duplicate Connection");
+        Undo.RecordObject(newSource.graph, "Duplicate Connection");
 
-            newConnection.SetSource(newSource, false);
-            newConnection.SetTarget(newTarget, false);
-
-            
-
-            newConnection.OnValidate(newSource.outConnections.IndexOf(newConnection), newTarget.inConnections.IndexOf(newConnection));
-            return newConnection;*/
-        return null;
+        var newConnection = JsonReader.Deserialize(JsonWriter.Serialize(this, new JsonWriterSettings() {MaxDepth = Int32.MaxValue}), true) as ConnectionTest;
+        newConnection.id = newSource.graph.GetAutoId();
+        newConnection.SetSource(newSource, false);
+        newConnection.SetTarget(newTarget, false);
+        newConnection.OnValidate(newSource.outConnections.IndexOf(newConnection), newTarget.inConnections.IndexOf(newConnection));
+        return newConnection;
     }
 
     public virtual void OnValidate(int sourceIndex, int targetIndex)
@@ -154,7 +151,7 @@ public abstract class ConnectionTest
 
     public void SetSource(NodeTest newSource, bool isRelink = true)
     {
-        Undo.RecordObject(graph, "Set Source");
+        Undo.RecordObject(newSource.graph, "Set Source");
 
         if (isRelink)
         {
@@ -171,7 +168,7 @@ public abstract class ConnectionTest
 
     public void SetTarget(NodeTest newTarget, bool isRelink = true)
     {
-        Undo.RecordObject(graph, "Set Target");
+        Undo.RecordObject(newTarget.graph, "Set Target");
 
         if (isRelink)
         {
