@@ -1,0 +1,46 @@
+UI框架当进行层次控制的时候改变了一个UI的层次，要通知代码，比如要修改UI内其他层的相对层次
+
+
+如何UI和粒子或普通MeshRenderer之间的渲染顺序：
+
+1 Camera的Depth和Canvas的SortingLayer通常不考虑，因为UICamera和SortingLayer通常都只用一个
+2 只考虑Position的z值，Material的RenderQueue，SortOrder(sortingOrder)三者之间的影响
+3 由于UI的内置shader的Queue都是Transparent(3000)并且不写深度缓存(但进行深度测试)，一旦普通Mesh的Shader写入深度，当其Position的z值
+  使其比UI离相机更近的时候，后续的UI渲染比较深度的时候不通过就不会渲染，导致RenderQueue和SortOrder(sortingOrder)无论多大都不会渲染
+  在普通Mesh前面，由于普通Mesh所使用的shader种类众多，无法保证是否ZWrite on，为了能够使用RenderQueue和SortOrder来控制渲染顺序，一般
+  应该将Mesh(普通模型)放置到离UICamera较远的地方，避免在其他UI之前，从而规避深度缓存的问题
+
+4 在不考虑深度缓存的时候，RenderQueue <= 2500 为不透明物体的渲染队列，大于2500为透明物体的渲染队列，一般UI的RenderQueue为3000，如果普通
+  Mesh的RenderQueue <= 2500，那么无论普通Mesh的SortOrder是否比UI的SortOrder大，总是UI显示在普通Mesh的前面，即此时只用SortOrder不好控制
+  它们之间的渲染顺序
+
+5 在不考虑深度缓存的时候，当假如普通mesh的RenderQueue和UI的RenderQueue都 <= 2500或者都 > 2500时，即它们同时处于不透明物体队列或者透明物体队列时，它们之间的渲染顺序完全
+  则完全受SortOrder的控制，越小的sortOrder先渲染
+
+
+综上，为了控制UI和粒子或普通MeshRenderer之间的渲染顺序，将UI和粒子或普通MeshRenderer统一使用一个UICamera进行渲染，为了规避深度缓存的影响，将普通Mesh和粒子放到离UICamera的较远
+位置上，同时设置普通Mesh和粒子的Material的RenderQueue = 3000（和内置UI的渲染队列相同），然后只使用SortOrder的大小来控制它们之间渲染顺序
+
+
+
+
+新版本UI图集管理，使用SpriteAlta来管理图集
+
+android默认使用etc2的格式，当判断机型是支持SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2 时候，热更新采用etc的spriteAtlas来管理图集
+ios默认使用astc格式的，当判断机型是iphone6以下机型的时候，热更新采用pvtr格式的图片
+
+针对低端机型的低配图集的热更新支持的研究，提高低端机表现
+
+
+关于图集管理的难点：
+	当图集中即存在alpha通道图片和不存在alpha通道图片的时候，什么时候把它们分离为一个只用RGB存储，一个只要用RGBA的存储，在内存和DrawCall有个取舍
+	通常当>=0.5的时候
+
+
+
+
+
+
+
+
+延迟渲染技术手动实现

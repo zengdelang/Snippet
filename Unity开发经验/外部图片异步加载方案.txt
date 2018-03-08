@@ -1,0 +1,30 @@
+t.LoadImage(d, true);  会自动改变图片大小
+
+加载的纹理在编辑器里面是双倍的
+
+jpg   jpeg 不支持透明，可以采用不同平台使用不同压缩格式
+
+
+Unity 代码创建的Texture2D释放内存需要没有引用并调用
+Resources.UnloadUnusedAssets();
+
+
+GameObject数量、资源数量多时，Resources.UnloadUnusedAssets CPU耗时比较高；
+
+
+Resources.UnloadUnusedAssetst 可以考虑当平均帧率低的时候考虑调用一次
+
+在一个场景中一直不切换达到多少分钟后可以，可以考虑卸载一次
+
+
+切场景的时候调用一次，并且GC回收一次
+
+
+性能优异的UI模块可以将体验提升一个档次
+
+
+
+
+测试Texture2D = new 和loadImage时候的内存分配
+
+Texture2D = new Texture2D(0,0)如果是和LoadImage配合使用
