@@ -38,6 +38,22 @@ public class BytesToString
             }
         }
 
-        File.WriteAllText("D:/test.txt", sb.ToString());
+        FileInfo fi = new FileInfo(path);
+        File.WriteAllText(Path.Combine(fi.Directory.FullName, Path.GetFileNameWithoutExtension(path))+".txt", sb.ToString());
+    }
+
+    [MenuItem("Tools/ConvertStringTo7z")]
+    public static void ConvertString()
+    {
+        var path = EditorUtility.OpenFilePanel("", "", "txt");
+        var str = File.ReadAllText(path);
+        str = str.Replace(" ", "");
+        str = str.Replace("\r", "");
+        str = str.Replace("\n", "");
+
+        var data = Convert.FromBase64String(str);
+
+        FileInfo fi = new FileInfo(path);
+        File.WriteAllBytes(Path.Combine(fi.Directory.FullName, Path.GetFileNameWithoutExtension(path)) + ".7z", data);
     }
 }
