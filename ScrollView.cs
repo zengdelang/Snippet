@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
@@ -31,9 +32,14 @@ public class ScrollView : UIBehaviour, IInitializePotentialDragHandler, IBeginDr
     {
     }
 
-    [SerializeField] private AbstractScrollViewLayout m_ContentLayout;
-    [SerializeField] private RectTransform m_Content;
+    [Serializable]
+    public class ContentPosChangedEvent : UnityEvent<Vector2, Vector2>
+    {
+        
+    }
 
+    [SerializeField] private RectTransform m_Content;
+ 
     public RectTransform content
     {
         get { return m_Content; }
@@ -189,11 +195,18 @@ public class ScrollView : UIBehaviour, IInitializePotentialDragHandler, IBeginDr
     }
 
     [SerializeField] private ScrollRectEvent m_OnValueChanged = new ScrollRectEvent();
+    [SerializeField] private ContentPosChangedEvent m_OnContentPosChanged = new ContentPosChangedEvent();
 
     public ScrollRectEvent onValueChanged
     {
         get { return m_OnValueChanged; }
         set { m_OnValueChanged = value; }
+    }
+
+    public ContentPosChangedEvent onContentPosChanged
+    {
+        get { return m_OnContentPosChanged; }
+        set { m_OnContentPosChanged = value; }
     }
 
     // The offset from handle position to mouse down position
@@ -217,6 +230,16 @@ public class ScrollView : UIBehaviour, IInitializePotentialDragHandler, IBeginDr
 
     protected Bounds m_ContentBounds;
     private Bounds m_ViewBounds;
+
+    public Bounds contentBounds
+    {
+        get { return m_ContentBounds;}
+    }
+
+    public Bounds viewBounds
+    {
+        get { return m_ViewBounds; }
+    }
 
     private Vector2 m_Velocity;
 
@@ -254,6 +277,46 @@ public class ScrollView : UIBehaviour, IInitializePotentialDragHandler, IBeginDr
     private RectTransform m_VerticalScrollbarRect;
 
     private DrivenRectTransformTracker m_Tracker;
+
+    //用于控制多点触摸，只有最新的拖拽才响应，比如多根手指一起拖动的问题
+    [SerializeField] protected bool m_SupportMultiTouch = true;
+    [NonSerialized] protected PointerEventData m_CurrentDragEvent;
+
+    public bool supportMultiTouch
+    {
+        get { return m_SupportMultiTouch; }
+        set
+        {
+            m_SupportMultiTouch = value;
+        }
+    }
+
+    [NonSerialized]
+    protected Vector2 m_StartPos;
+    [NonSerialized]
+    protected Vector2 m_EndPos;
+    [NonSerialized]
+    protected float m_StartAnimationTime;
+    [SerializeField]
+    protected float m_AnimationTime = 0.5f;
+
+    [NonSerialized]
+    protected IInterpolator m_Interpolator = new AccelerateDecelerateInterpolator();
+
+    public IInterpolator interpolator
+    {
+        get { return m_Interpolator; }
+        set { m_Interpolator = value; }
+    }
+    protected bool isAnimating
+    {
+        get; set;
+    }
+
+    public bool dragging
+    {
+        get { return m_Dragging; }
+    }
 
     protected ScrollView()
     {
@@ -327,11 +390,14 @@ public class ScrollView : UIBehaviour, IInitializePotentialDragHandler, IBeginDr
         if (m_VerticalScrollbar)
             m_VerticalScrollbar.onValueChanged.RemoveListener(SetVerticalNormalizedPosition);
 
+        StopAnimation(true);
         m_HasRebuiltLayout = false;
         m_Tracker.Clear();
         m_Velocity = Vector2.zero;
         LayoutRebuilder.MarkLayoutForRebuild(rectTransform);
         base.OnDisable();
+
+        m_CurrentDragEvent = null;
     }
 
     public override bool IsActive()
@@ -388,7 +454,9 @@ public class ScrollView : UIBehaviour, IInitializePotentialDragHandler, IBeginDr
         if (eventData.button != PointerEventData.InputButton.Left)
             return;
 
+        m_CurrentDragEvent = eventData;
         m_Velocity = Vector2.zero;
+        StopAnimation(false);
     }
 
     public virtual void OnBeginDrag(PointerEventData eventData)
@@ -398,6 +466,12 @@ public class ScrollView : UIBehaviour, IInitializePotentialDragHandler, IBeginDr
 
         if (!IsActive())
             return;
+
+        if (m_SupportMultiTouch)
+        {
+            if (m_CurrentDragEvent == null || eventData != m_CurrentDragEvent)
+                return;
+        }
 
         UpdateBounds();
 
@@ -413,6 +487,13 @@ public class ScrollView : UIBehaviour, IInitializePotentialDragHandler, IBeginDr
         if (eventData.button != PointerEventData.InputButton.Left)
             return;
 
+        if (m_SupportMultiTouch)
+        {
+            if (m_CurrentDragEvent == null || eventData != m_CurrentDragEvent)
+                return;
+        }
+
+        m_CurrentDragEvent = null;
         m_Dragging = false;
     }
 
@@ -423,6 +504,12 @@ public class ScrollView : UIBehaviour, IInitializePotentialDragHandler, IBeginDr
 
         if (!IsActive())
             return;
+
+        if (m_SupportMultiTouch)
+        {
+            if (m_CurrentDragEvent == null || eventData != m_CurrentDragEvent)
+                return;
+        }
 
         Vector2 localCursor;
         if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(viewRect, eventData.position,
@@ -457,30 +544,13 @@ public class ScrollView : UIBehaviour, IInitializePotentialDragHandler, IBeginDr
 
         if (position != m_Content.anchoredPosition)
         {
+            var oldPos = m_Content.anchoredPosition;
             m_Content.anchoredPosition = position;
-            Debug.LogError(position);
             UpdateBounds();
-            if (m_ContentLayout != null)
-                m_ContentLayout.OnContentPositionChanged(this, m_ViewBounds, m_ContentBounds);
+
+            onContentPosChanged.Invoke(oldPos, position);
         }
     }
-
-    protected bool isAnimating
-    {
-        get; set;
-    }
-
-    [NonSerialized]
-    protected Vector2 m_StartPos;
-
-    [NonSerialized]
-    protected Vector2 m_EndPos;
-
-    [NonSerialized] protected float m_StartAnimationTime;
-
-    [SerializeField] protected float m_AnimationTime;
-
-    [NonSerialized] protected AccelerateDecelerateInterpolator m_Interpolator = new AccelerateDecelerateInterpolator();
 
     public float AnimationTime
     {
@@ -502,9 +572,9 @@ public class ScrollView : UIBehaviour, IInitializePotentialDragHandler, IBeginDr
         }
 
         isAnimating = true;
-        m_StartPos  = m_Content.anchoredPosition;
-        m_EndPos    = targetPos;
-        m_Velocity  = Vector2.zero;
+        m_StartPos = m_Content.anchoredPosition;
+        m_EndPos = targetPos;
+        m_Velocity = Vector2.zero;
         m_StartAnimationTime = 0;
     }
 
@@ -519,18 +589,22 @@ public class ScrollView : UIBehaviour, IInitializePotentialDragHandler, IBeginDr
             return;
         }
 
-        //测试，从上往下，从下往上跳舞
-        var factor = m_Interpolator.GetInterpolation(m_StartAnimationTime / AnimationTime);
-        SetContentAnchoredPosition((m_EndPos - m_StartPos) * factor + m_StartPos);
+        if (m_Interpolator != null)
+        {
+            var factor = m_Interpolator.GetInterpolation(m_StartAnimationTime / AnimationTime);
+            SetContentAnchoredPosition((m_EndPos - m_StartPos) * factor + m_StartPos);
+        }
+        else
+        {
+            Debug.LogError("动画插值器为空");
+        }
     }
 
-    //OnDisable true
-    //Drag false
     public void StopAnimation(bool setEndPos)
     {
         if (isAnimating)
         {
-            isAnimating = true;
+            isAnimating = false;
             if (setEndPos)
             {
                 SetContentAnchoredPosition(m_EndPos);
@@ -906,7 +980,7 @@ public class ScrollView : UIBehaviour, IInitializePotentialDragHandler, IBeginDr
         }
     }
 
-    protected void UpdateBounds()
+    public void UpdateBounds()
     {
         m_ViewBounds = new Bounds(viewRect.rect.center, viewRect.rect.size);
         m_ContentBounds = GetBounds();
