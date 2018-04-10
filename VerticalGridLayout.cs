@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
@@ -6,6 +6,7 @@ using UnityEngine.UI;
 
 public interface IItemView
 {
+    int index { get; set; }
     RectTransform rectTransform { get; set; }
 }
 
@@ -52,12 +53,14 @@ public interface IFixedSizeItemAdapter
 /// <summary>
 /// 竖直网格布局, 支持ScrollView竖直滑动的时候使用有限的几个item不断复用进行网格布局
 /// </summary>
-public class VerticalGridLayout : LayoutGroup, IDynamicLayout
+public class VerticalGridLayout : MonoBehaviour, IDynamicLayout
 {
     [Serializable]
     public class BoolUnityEvent : UnityEvent<bool>
     {
     }
+
+    [SerializeField] protected RectOffset m_Padding = new RectOffset();
 
     [SerializeField] protected int m_Column = 1; //布局信息,Item显示的列数
 
@@ -82,17 +85,24 @@ public class VerticalGridLayout : LayoutGroup, IDynamicLayout
     [SerializeField] protected BoolUnityEvent m_ArrowUpEvent = new BoolUnityEvent(); //向上箭头指示
     [SerializeField] protected BoolUnityEvent m_ArrowDownEvent = new BoolUnityEvent(); //向下箭头指示
 
+    protected DrivenRectTransformTracker m_Tracker;
     protected int m_FirstPosition; //当前第一个可视的Item在所有数据中的索引位置
     protected IFixedSizeItemAdapter m_Adapter; //布局所使用的适配器
     protected RecycleBin m_RecycleBin = new RecycleBin(); //ItemView的缓存池
     protected Deque<IItemView> m_ItemViewChildren = new Deque<IItemView>(); //保存可视的itemView的双端队列
 
-    public int column
+    /// <summary>
+    ///   <para>The padding to add around the child layout elements.</para>
+    /// </summary>
+    public RectOffset padding
     {
-        get { return m_Column; }
+        get
+        {
+            return m_Padding;
+        }
         set
         {
-            m_Column = Mathf.Clamp(m_Column, 1, int.MaxValue);
+            m_Padding = value;
             RefreshAllItem();
         }
     }
@@ -110,10 +120,24 @@ public class VerticalGridLayout : LayoutGroup, IDynamicLayout
         }
     }
 
+    public int column
+    {
+        get { return m_Column; }
+        set
+        {
+            m_Column = Mathf.Clamp(m_Column, 1, int.MaxValue);
+            RefreshAllItem();
+        }
+    }
+
     public bool expandWidth
     {
         get { return m_ExpandWidth; }
-        set { SetProperty(ref m_ExpandWidth, value); }
+        set
+        {
+            m_ExpandWidth = value;
+            RefreshCurrentItem();
+        }
     }
 
     public bool autoDrag
@@ -192,17 +216,15 @@ public class VerticalGridLayout : LayoutGroup, IDynamicLayout
         set { m_ArrowDownEvent = value; }
     }
 
-    protected override void OnEnable()
+    protected void OnEnable()
     {
-        base.OnEnable();
         SetupPivotAndAnchor();
         RefreshCurrentItem();
     }
 
-    protected override void OnDisable()
+    protected void OnDisable()
     {
         m_Tracker.Clear();
-        base.OnDisable();
     }
 
     /// <summary>
@@ -457,8 +479,6 @@ public class VerticalGridLayout : LayoutGroup, IDynamicLayout
 
         if (firstShowItemIndex != m_FirstPosition || newLastItemIndex != oldLastItemIndex)
         {
-            bool needRebuildLayout = false;
-
             //先清除需要隐藏的item
             if (firstShowItemIndex > m_FirstPosition)
             {
@@ -467,9 +487,7 @@ public class VerticalGridLayout : LayoutGroup, IDynamicLayout
                     if (m_ItemViewChildren.Count == 0)
                         break;
 
-                    var item = m_ItemViewChildren.DequeueFirst();
-                    m_RecycleBin.AddScrapView(item);
-                    needRebuildLayout = true;
+                    m_RecycleBin.AddScrapView(m_ItemViewChildren.DequeueFirst());
                 }
             }
 
@@ -481,9 +499,12 @@ public class VerticalGridLayout : LayoutGroup, IDynamicLayout
                         break;
 
                     m_RecycleBin.AddScrapView(m_ItemViewChildren.DequeueLast());
-                    needRebuildLayout = true;
                 }
             }
+
+            var widthDelta = (m_ScrollView.content.rect.width + spacing.x - padding.horizontal) / column;
+            var heightDelta = m_Adapter.GetItemSize().y + spacing.y;
+            var itemWidth = widthDelta - spacing.x;
 
             //再复用item
             if (firstShowItemIndex < m_FirstPosition)
@@ -501,11 +522,11 @@ public class VerticalGridLayout : LayoutGroup, IDynamicLayout
                     {
                         itemView = m_Adapter.GetItemView(m_ScrollView.content.gameObject);
                     }
-                    RecycleItemView(itemView.rectTransform, 0);
+                    SetItemViewVisible(itemView.rectTransform, 0);
+                    itemView.index = i;
                     m_Adapter.ProcessItemView(i, itemView, this);
-
                     m_ItemViewChildren.EnqueueFirst(itemView);
-                    needRebuildLayout = true;
+                    SetItemPosition(i, itemView.rectTransform, widthDelta, heightDelta, itemWidth);
                 }
             }
 
@@ -523,17 +544,15 @@ public class VerticalGridLayout : LayoutGroup, IDynamicLayout
                     {
                         itemView = m_Adapter.GetItemView(m_ScrollView.content.gameObject);
                     }
-                    RecycleItemView(itemView.rectTransform, 0);
+                    SetItemViewVisible(itemView.rectTransform, 0);
+                    itemView.index = i;
                     m_Adapter.ProcessItemView(i, itemView, this);
-
                     m_ItemViewChildren.EnqueueLast(itemView);
-                    needRebuildLayout = true;
+                    SetItemPosition(i, itemView.rectTransform, widthDelta, heightDelta, itemWidth);
                 }
             }
 
             m_FirstPosition = firstShowItemIndex;
-            if (needRebuildLayout)
-                SetDirty();
         }
     }
 
@@ -603,62 +622,39 @@ public class VerticalGridLayout : LayoutGroup, IDynamicLayout
 
     #region 布局
 
-    public override void CalculateLayoutInputHorizontal()
+    /// <summary>
+    /// 设置item的显示位置
+    /// </summary>
+    protected void SetItemPosition(int itemIndex, RectTransform rectTransform, float widthDelta, float heightDelta, float itemWidth)
     {
-        if (m_ScrollView == null)
-            return;
-        SetLayoutInputForAxis(m_ScrollView.content.rect.width, m_ScrollView.content.rect.width, -1, 0);
-    }
-
-    public override void CalculateLayoutInputVertical()
-    {
-        if (m_ScrollView == null)
-            return;
-        SetLayoutInputForAxis(m_ScrollView.content.rect.height, m_ScrollView.content.rect.height, -1, 1);
-    }
-
-    public override void SetLayoutHorizontal()
-    {
-        SetCellsAlongAxis(0);
-    }
-
-    public override void SetLayoutVertical()
-    {
-        SetCellsAlongAxis(1);
-    }
-
-    private void SetCellsAlongAxis(int axis)
-    {
-        if (m_ScrollView == null || m_Adapter == null)
-            return;
-
-        if (axis == 0)
+        var columnIndex = itemIndex % column;
+        if (m_ExpandWidth)
         {
-            return;
+            SetChildAlongAxis(rectTransform, 0, padding.left + columnIndex * widthDelta, itemWidth);
+        }
+        else
+        {
+            SetChildAlongAxis(rectTransform, 0, padding.left + columnIndex * widthDelta);
         }
 
-        var widthDelta = (m_ScrollView.content.rect.width + spacing.x - padding.horizontal) / column;
-        var heightDelta = m_Adapter.GetItemSize().y + spacing.y;
-        var itemWidth = widthDelta - spacing.x;
+        var rowIndex = itemIndex / column;
+        SetChildAlongAxis(rectTransform, 1, padding.top + rowIndex * heightDelta);
+    }
 
-        for (int i = 0, count = m_ItemViewChildren.Count; i < count; i++)
-        {
-            var childTransform = m_ItemViewChildren.GetElement(i).rectTransform;
-            var index = m_FirstPosition + i;
-            var columnIndex = index % column;
+    protected void SetChildAlongAxis(RectTransform rect, int axis, float pos)
+    {
+        if (rect == null)
+            return;
+        m_Tracker.Add(this, rect, (DrivenTransformProperties)(3840 | (axis != 0 ? 4 : 2)));
+        rect.SetInsetAndSizeFromParentEdge(axis != 0 ? RectTransform.Edge.Top : RectTransform.Edge.Left, pos, rect.sizeDelta[axis]);
+    }
 
-            if (m_ExpandWidth)
-            {
-                SetChildAlongAxis(childTransform, 0, padding.left + columnIndex * widthDelta, itemWidth);
-            }
-            else
-            {
-                SetChildAlongAxis(childTransform, 0, padding.left + columnIndex * widthDelta);
-            }
-
-            var rowIndex = index / column;
-            SetChildAlongAxis(childTransform, 1, padding.top + rowIndex * heightDelta);
-        }
+    protected void SetChildAlongAxis(RectTransform rect, int axis, float pos, float size)
+    {
+        if (rect == null)
+            return;
+        m_Tracker.Add(this, rect, (DrivenTransformProperties)(3840 | (axis != 0 ? 8196 : 4098)));
+        rect.SetInsetAndSizeFromParentEdge(axis != 0 ? RectTransform.Edge.Top : RectTransform.Edge.Left, pos, size);
     }
 
     #endregion
@@ -666,12 +662,12 @@ public class VerticalGridLayout : LayoutGroup, IDynamicLayout
     #region Item缓存管理
 
     /// <summary>
-    /// 回收当前不可视的Item,这里不直接使用GameObject的SetActive(), 因为UGUI的ui控件在OnEnable的时候会有GC产生
-    /// 因此使用设置z深度,使item远离裁决区域达到不显示的目的
+    /// 设置item的可视性,这里不直接使用GameObject的SetActive(), 因为UGUI的ui控件在OnEnable的时候会有GC产生
+    /// 因此使用设置z深度改变item的可视性
     /// </summary>
     /// <param name="itemTransform"></param>
     /// <param name="z"></param>
-    protected static void RecycleItemView(RectTransform itemTransform, float z = -100000)
+    protected static void SetItemViewVisible(RectTransform itemTransform, float z = -100000)
     {
         var pos = itemTransform.localPosition;
         pos.z = z;
@@ -712,7 +708,7 @@ public class VerticalGridLayout : LayoutGroup, IDynamicLayout
             if (scrap == null)
                 return;
 
-            RecycleItemView(scrap.rectTransform);
+            SetItemViewVisible(scrap.rectTransform);
             m_CurrentScrap.Add(scrap);
         }
     }
