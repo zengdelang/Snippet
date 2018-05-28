@@ -1,0 +1,8 @@
+{
+    //从excel导出json配置文件的存放路径，相对于exe可执行文件的路径
+    //relativeExportPath的优先级比absoluteExprotPath高，如果relativeExportPath不为空，则使用relativeExportPath的路径保存导出文件
+    "relativeExportPath" : "./TestOuput",
+    //从excel导出json配置文件的存放路径，文件系统的绝对路径
+     //relativeExportPath的优先级比absoluteExprotPath高，如果relativeExportPath不为空，则使用relativeExportPath的路径保存导出文件
+    "absoluteExprotPath" : ""
+}
